@@ -1,0 +1,181 @@
+#include <Servo.h>
+#include<SPI.h>
+#include<SD.h>
+#include <EEPROM.h>//used to store recorded values
+
+#include <Adafruit_NeoPixel.h>
+#define PIN 6
+#define NUM_LEDS 48
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, PIN, NEO_GRB + NEO_KHZ800);
+
+Servo S1, S2, S3, S4, S5;
+File file;
+
+int pushpin = 5;
+int i;
+int val;
+int servo;
+
+float resolution = 1024;  //EEPROM.length() is 1024 
+float recordTime = 5;     //delay time
+bool recording = false;
+bool copied=false;
+
+const int chipSelect=4;
+
+void setup() 
+{
+ strip.begin();
+ for (int i=0; i<=NUM_LEDS; ++i)
+  {
+    strip.setPixelColor(i, 0, 0, 0);
+    strip.show();
+  }
+ 
+ pinMode(LED_BUILTIN, OUTPUT); //status led
+ pinMode(pushpin, OUTPUT);
+
+ SD.begin(chipSelect);
+ 
+ S1.attach(7);
+ S2.attach(8);
+ S3.attach(9);
+ S4.attach(10);
+
+ S1.write(120);
+ S2.write(160);
+ S3.write(130);
+ S4.write(145);
+ 
+ Serial.begin(9600);
+ digitalWrite(pushpin, HIGH);
+ 
+ Serial.print(EEPROM.length());
+ //clear EEPROM
+ for (int i = 1 ; i <=EEPROM.length() ; i++) 
+   EEPROM.write(i, 120);
+}
+
+void mapPot(int& i)   //map potentiometer values to servos and store positions 
+{
+  val = map(analogRead(A0), 0, 1023, 1, 179);
+  EEPROM.write(i, val);
+  
+  Serial.println(EEPROM.read(i));
+  Serial.println("A0");
+  Serial.println(i);
+  
+  S1.write(val);
+  i++;
+ 
+
+  val = map(analogRead(A1), 0, 1023, 1, 179);
+  EEPROM.write(i, val);
+  
+  Serial.println(EEPROM.read(i));
+  Serial.println("A1");
+  Serial.println(i);
+  
+  S2.write(val);
+  i++;
+
+  
+  val = map(analogRead(A2), 0, 1023, 1, 179);
+  EEPROM.write(i, val);
+
+  Serial.println(EEPROM.read(i));
+  Serial.println("A2");
+  Serial.println(i);
+
+  S3.write(val);
+  i++;
+
+  val = map(analogRead(A3), 0, 1023, 1, 179);
+  EEPROM.write(i, val);
+  
+  Serial.println(EEPROM.read(i));
+  Serial.println("A3");
+  Serial.println(i);
+  
+  S4.write(val);
+}
+
+void loop() 
+{
+ Serial.print("recording: ");
+ Serial.println(recording);
+ 
+ if (recording == true) 
+ {
+   Serial.println("RECORD");
+   delay(500);
+   
+   for (i = 1; i <= resolution; i++) 
+   {
+     digitalWrite(LED_BUILTIN, HIGH); //light status led
+     mapPot(i);
+     delay(recordTime);
+   }
+   digitalWrite(LED_BUILTIN, LOW); //turn off status led
+   delay(1000);//give time for person
+   recording = false;
+
+   //copying onto SD
+   file=SD.open("data68.txt", FILE_WRITE);
+   for (i=1; i<=1024; ++i)
+    file.println(EEPROM.read(i));
+   file.close();
+   copied=true;
+ }
+ 
+ else 
+ {
+   Serial.println("PLAYBACK");
+   delay(500);
+  
+   
+   for (int i = 1; i <= resolution; i++) 
+   {
+     if (digitalRead(pushpin) == 0) 
+      {
+       //stop playback and record new values
+       recording = true;
+       break;
+      }
+  
+     else if (copied==true)
+     {int readval = EEPROM.read(i);
+
+     //determine which servo to move
+     if (i%4!=0)
+      servo=i%4;
+     else
+      servo=4;
+     
+     switch(servo)
+     {
+       case 1: S1.write(readval);
+                break;
+
+       case 2: S2.write(readval);
+                break;
+
+       case 3: S3.write(readval);
+                break;
+
+       case 4: S4.write(readval);
+                break;
+     }
+
+            
+     Serial.println(readval);
+     delay(recordTime); 
+   
+   
+   digitalWrite(LED_BUILTIN, HIGH); //show a new repeat
+   delay(100);
+   digitalWrite(LED_BUILTIN, LOW);
+   }
+  }
+ }
+}
